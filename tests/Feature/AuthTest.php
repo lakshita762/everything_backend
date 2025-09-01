@@ -1,18 +1,29 @@
 <?php
 
-it('registers, logins and returns me', function () {
-    $reg = $this->postJson('/api/v1/register', [
-        'name'=>'Test', 'email'=>'test@example.com', 'password'=>'password'
-    ])->assertStatus(201)->json();
+namespace Tests\Feature;
 
-    $token = $reg['data']['token'];
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
 
-    $this->withHeader('Authorization', "Bearer $token")
-        ->get('/api/v1/me')->assertOk();
+class AuthTest extends TestCase
+{
+    use RefreshDatabase;
 
-    $login = $this->postJson('/api/v1/login', [
-        'email'=>'test@example.com', 'password'=>'password'
-    ])->assertOk()->json();
+    public function test_registers_logins_and_returns_me()
+    {
+        $reg = $this->postJson('/api/v1/register', [
+            'name'=>'Test', 'email'=>'test@example.com', 'password'=>'password'
+        ])->assertStatus(201)->json();
 
-    expect($login['data']['token'])->not->toBeEmpty();
-});
+        $token = $reg['data']['token'];
+
+        $this->withHeader('Authorization', "Bearer $token")
+            ->get('/api/v1/me')->assertOk();
+
+        $login = $this->postJson('/api/v1/login', [
+            'email'=>'test@example.com', 'password'=>'password'
+        ])->assertOk()->json();
+
+        $this->assertNotEmpty($login['data']['token']);
+    }
+}

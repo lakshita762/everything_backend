@@ -37,6 +37,9 @@ Route::prefix('v1')
             Route::post('logout', [AuthController::class, 'logout'])
                 ->name('logout');
 
+            Route::get ('load-data', [AuthController::class, 'loadData'])
+                ->name('load-data');
+
             /* Resources */
             Route::apiResource('todos',     TodoController::class);
             Route::apiResource('expenses',  ExpenseController::class);
