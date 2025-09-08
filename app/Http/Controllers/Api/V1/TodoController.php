@@ -21,14 +21,17 @@ class TodoController extends Controller
 
     public function store(TodoStoreRequest $request)
     {
-        $todo = $request->user()->todos()->create($request->validated());
-        return $this->success($todo, 'Created', 201);
+        $data = $request->validated();
+        $data['user_id'] = $request->user()->id;
+
+        $todo = Todo::create($data);
+        return response()->json($todo, 201); // 'date' will be included
     }
 
-    public function show(Request $request, Todo $todo)
+    public function show($id)
     {
-        $this->authorizeOwner($request, $todo->user_id);
-        return $this->success($todo);
+        $todo = Todo::findOrFail($id);
+        return response()->json($todo); // 'date' will be included
     }
 
     public function update(TodoUpdateRequest $request, Todo $todo)
