@@ -45,6 +45,14 @@ Route::prefix('v1')
             Route::apiResource('expenses',  ExpenseController::class);
             Route::apiResource('locations', LocationController::class)
                  ->only(['index', 'store', 'show', 'destroy']);
+
+            // Live location sessions
+            Route::post('live-sessions', [\App\Http\Controllers\Api\V1\LiveSessionController::class, 'store']);
+            Route::post('live-sessions/{session_id}/update', [\App\Http\Controllers\Api\V1\LiveSessionController::class, 'update'])->middleware(\App\Http\Middleware\ThrottlePerSession::class);
+            Route::get('live-sessions/{session_id}', [\App\Http\Controllers\Api\V1\LiveSessionController::class, 'show']);
+            Route::post('live-sessions/{session_id}/end', [\App\Http\Controllers\Api\V1\LiveSessionController::class, 'end']);
+            Route::get('live-sessions', [\App\Http\Controllers\Api\V1\LiveSessionController::class, 'listByOwner']);
+            Route::get('live-sessions/{session_id}/events', [\App\Http\Controllers\Api\V1\LiveSessionController::class, 'events']);
         });
 
         /* ─────── Admin-only examples ─────── */
