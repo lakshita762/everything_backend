@@ -21,21 +21,25 @@ Route::prefix('v1')
     ->group(function () {
 
         /* ──────── Public auth ──────── */
-        Route::post('register', [AuthController::class, 'register'])
+        Route::prefix('auth')->middleware('throttle:60,1')->group(function () {
+            Route::post('register', [AuthController::class, 'register'])
             ->name('register');
-
-        Route::post('login',    [AuthController::class, 'login'])
-            ->name('login');
+            Route::post('login',    [AuthController::class, 'login'])
+                ->name('login');
+            Route::post('google',   [AuthController::class, 'google'])
+                ->name('google');
+        });
 
         /* ─────── Routes that need a valid Sanctum token ─────── */
         Route::middleware('auth:sanctum')->group(function () {
 
             /* Auth */
-            Route::get ('me',     [AuthController::class, 'me'])
-                ->name('me');
-
-            Route::post('logout', [AuthController::class, 'logout'])
-                ->name('logout');
+            Route::prefix('auth')->group(function () {
+                Route::get ('me',     [AuthController::class, 'me'])
+                    ->name('me');
+                Route::post('logout', [AuthController::class, 'logout'])
+                    ->name('logout');
+            });
 
             Route::get ('load-data', [AuthController::class, 'loadData'])
                 ->name('load-data');
