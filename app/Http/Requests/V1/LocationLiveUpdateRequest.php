@@ -4,7 +4,7 @@ namespace App\Http\Requests\V1;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class LocationStoreRequest extends FormRequest
+class LocationLiveUpdateRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,9 +14,10 @@ class LocationStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'share_id' => ['required', 'exists:location_shares,id'],
             'lat' => ['required', 'numeric', 'between:-90,90'],
             'lng' => ['required', 'numeric', 'between:-180,180'],
-            'label' => ['nullable', 'string', 'max:120'],
+            'recorded_at' => ['nullable', 'date'],
         ];
     }
 }

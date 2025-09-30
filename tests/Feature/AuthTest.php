@@ -2,28 +2,81 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use Google\Client as GoogleClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Mockery;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_registers_logins_and_returns_me()
+    protected function tearDown(): void
     {
-        $reg = $this->postJson('/api/v1/register', [
-            'name'=>'Test', 'email'=>'test@example.com', 'password'=>'password'
-        ])->assertStatus(201)->json();
+        Mockery::close();
+        parent::tearDown();
+    }
 
-        $token = $reg['data']['token'];
+    public function test_user_can_register_login_and_logout(): void
+    {
+        $register = $this->postJson('/api/v1/auth/register', [
+            'name' => 'Test User',
+            'email' => 'test@example.com',
+            'password' => 'password123',
+        ])->assertCreated();
 
-        $this->withHeader('Authorization', "Bearer $token")
-            ->get('/api/v1/me')->assertOk();
+        $token = $register->json('data.token');
+        $this->assertNotEmpty($token);
 
-        $login = $this->postJson('/api/v1/login', [
-            'email'=>'test@example.com', 'password'=>'password'
-        ])->assertOk()->json();
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/auth/me')
+            ->assertOk()
+            ->assertJsonPath('data.user.email', 'test@example.com');
 
-        $this->assertNotEmpty($login['data']['token']);
+        $login = $this->postJson('/api/v1/auth/login', [
+            'email' => 'test@example.com',
+            'password' => 'password123',
+        ])->assertOk();
+
+        $this->assertNotEmpty($login->json('data.token'));
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/auth/logout')
+            ->assertOk()
+            ->assertJsonPath('data.message', 'Logged out');
+    }
+
+    public function test_google_login_upserts_user(): void
+    {
+        config()->set('services.google.client_id', 'test-client');
+
+        $mock = Mockery::mock(GoogleClient::class);
+        $mock->shouldReceive('setClientId')->once()->with('test-client');
+        $mock->shouldReceive('verifyIdToken')
+            ->once()
+            ->with('valid-token')
+            ->andReturn([
+                'aud' => 'test-client',
+                'iss' => 'https://accounts.google.com',
+                'email_verified' => true,
+                'sub' => 'google-123',
+                'email' => 'google@example.com',
+                'name' => 'Google Person',
+                'picture' => 'https://example.com/avatar.png',
+            ]);
+
+        app()->instance(GoogleClient::class, $mock);
+
+        $response = $this->postJson('/api/v1/auth/google', [
+            'id_token' => 'valid-token',
+        ])->assertOk();
+
+        $response->assertJsonPath('data.user.email', 'google@example.com');
+        $this->assertDatabaseHas('users', [
+            'email' => 'google@example.com',
+            'google_id' => 'google-123',
+        ]);
     }
 }

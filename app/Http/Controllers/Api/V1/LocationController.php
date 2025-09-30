@@ -4,40 +4,65 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\V1\LocationStoreRequest;
-use App\Http\Responses\ApiResponse;
+use App\Http\Resources\LocationEntryResource;
 use App\Models\LocationEntry;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class LocationController extends Controller
 {
-    use ApiResponse;
-
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $items = LocationEntry::where('user_id',$request->user()->id)->latest()->paginate(20);
-        return $this->success($items);
+        $locations = $request->user()->locationEntries()->latest()->get();
+
+        return response()->json([
+            'data' => [
+                'locations' => LocationEntryResource::collection($locations),
+            ],
+        ]);
     }
 
-    public function store(LocationStoreRequest $request)
+    public function store(LocationStoreRequest $request): JsonResponse
     {
-        $item = $request->user()->locationEntries()->create($request->validated());
-        return $this->success($item, 'Created', 201);
+        $data = $request->validated();
+
+        $entry = $request->user()->locationEntries()->create([
+            'title' => $data['label'] ?? 'Pinned Location',
+            'latitude' => $data['lat'],
+            'longitude' => $data['lng'],
+        ]);
+
+        return response()->json([
+            'data' => [
+                'location' => new LocationEntryResource($entry),
+            ],
+        ], 201);
     }
 
-    public function show(Request $request, LocationEntry $location)
+    public function show(Request $request, LocationEntry $location): JsonResponse
     {
         $this->authorizeOwner($request, $location->user_id);
-        return $this->success($location);
+
+        return response()->json([
+            'data' => [
+                'location' => new LocationEntryResource($location),
+            ],
+        ]);
     }
 
-    public function destroy(Request $request, LocationEntry $location)
+    public function destroy(Request $request, LocationEntry $location): JsonResponse
     {
         $this->authorizeOwner($request, $location->user_id);
         $location->delete();
-        return $this->success(null, 'Deleted');
+
+        return response()->json([
+            'data' => [
+                'message' => 'Location removed',
+            ],
+        ]);
     }
 
-    private function authorizeOwner(Request $request, $ownerId)
+    private function authorizeOwner(Request $request, int $ownerId): void
     {
         abort_unless($request->user()->id === $ownerId, 403, 'Forbidden');
     }

@@ -2,64 +2,100 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
 use App\Models\User;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Redis;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
 
 class LiveSessionTest extends TestCase
 {
-    public function test_create_update_get_end_flow()
+    use RefreshDatabase;
+
+    public function test_tracker_can_push_live_updates_and_stream_data(): void
     {
-        $user = User::factory()->create();
-        $token = $user->createToken('test')->plainTextToken;
+        $owner = User::factory()->create();
+        $tracker = User::factory()->create();
 
-        // create
-        $res = $this->withHeaders(['Authorization' => "Bearer {$token}"])
-            ->postJson('/api/v1/live-sessions', ['title' => 'Walk']);
-        $res->assertStatus(201)->assertJsonStructure(['data' => ['session_id','title','created_at']]);
-        $session_id = $res->json('data.session_id');
+        Sanctum::actingAs($owner);
+        $shareResponse = $this->postJson('/api/v1/location-shares', [
+            'name' => 'Morning Run',
+            'allow_history' => true,
+        ])->assertCreated();
 
-        // update
-        $update = $this->withHeaders(['Authorization' => "Bearer {$token}"])
-            ->postJson("/api/v1/live-sessions/{$session_id}/update", [
-                'latitude' => 12.34,
-                'longitude' => 56.78,
-                'accuracy' => 5
-            ]);
-        $update->assertStatus(200)->assertJson(['status' => 'ok']);
+        $shareId = $shareResponse->json('data.share.id');
+        $sessionToken = $shareResponse->json('data.share.session_token');
 
-        // get
-        $get = $this->withHeaders(['Authorization' => "Bearer {$token}"])
-            ->getJson("/api/v1/live-sessions/{$session_id}");
-        $get->assertStatus(200)->assertJsonPath('data.latitude', 12.34);
+        $participant = $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
+            'email' => $tracker->email,
+            'role' => 'tracker',
+        ])->assertCreated();
 
-        // end
-        $end = $this->withHeaders(['Authorization' => "Bearer {$token}"])
-            ->postJson("/api/v1/live-sessions/{$session_id}/end");
-        $end->assertStatus(200)->assertJson(['status' => 'ended']);
+        $participantId = $participant->json('data.participant.id');
 
-        // get after end -> 410
-        $get2 = $this->withHeaders(['Authorization' => "Bearer {$token}"])
-            ->getJson("/api/v1/live-sessions/{$session_id}");
-        $get2->assertStatus(410);
+        Sanctum::actingAs($tracker);
+        $this->postJson("/api/v1/location-shares/invites/{$participantId}/accept")
+            ->assertOk()
+            ->assertJsonPath('data.participant.status', 'accepted');
+
+        $this->postJson('/api/v1/locations/live', [
+            'share_id' => $shareId,
+            'lat' => 12.345678,
+            'lng' => 98.765432,
+        ])->assertCreated();
+
+        $stream = $this->withHeader('Accept', 'text/event-stream')
+            ->get("/api/v1/locations/live/{$sessionToken}")
+            ->assertOk();
+
+        $this->assertStringContainsString('12.345678', $stream->streamedContent());
     }
 
-    public function test_redis_publish_on_update()
+    public function test_viewer_cannot_push_live_updates(): void
     {
-        Redis::shouldReceive('publish')->once();
+        $owner = User::factory()->create();
+        $viewer = User::factory()->create();
 
-        $user = User::factory()->create();
-        $token = $user->createToken('test')->plainTextToken;
+        Sanctum::actingAs($owner);
+        $shareId = $this->postJson('/api/v1/location-shares', [
+            'name' => 'Family Trip',
+        ])->assertCreated()->json('data.share.id');
 
-        $res = $this->withHeaders(['Authorization' => "Bearer {$token}"])
-            ->postJson('/api/v1/live-sessions', ['title' => 'Run']);
-        $session_id = $res->json('data.session_id');
+        $participantId = $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
+            'email' => $viewer->email,
+            'role' => 'viewer',
+        ])->assertCreated()->json('data.participant.id');
 
-        $this->withHeaders(['Authorization' => "Bearer {$token}"])
-            ->postJson("/api/v1/live-sessions/{$session_id}/update", [
-                'latitude' => 1.2,
-                'longitude' => 3.4
-            ])->assertStatus(200);
+        Sanctum::actingAs($viewer);
+        $this->postJson("/api/v1/location-shares/invites/{$participantId}/accept")
+            ->assertOk();
+
+        $this->postJson('/api/v1/locations/live', [
+            'share_id' => $shareId,
+            'lat' => 1,
+            'lng' => 1,
+        ])->assertStatus(403);
+    }
+
+    public function test_pending_invite_appears_in_location_share_index(): void
+    {
+        $owner = User::factory()->create();
+        $invitee = User::factory()->create();
+
+        Sanctum::actingAs($owner);
+        $shareId = $this->postJson('/api/v1/location-shares', [
+            'name' => 'Ski Weekend',
+        ])->assertCreated()->json('data.share.id');
+
+        $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
+            'email' => $invitee->email,
+            'role' => 'viewer',
+        ])->assertCreated();
+
+        Sanctum::actingAs($invitee);
+        $index = $this->getJson('/api/v1/location-shares')
+            ->assertOk();
+
+        $this->assertNotEmpty($index->json('data.invites'));
+        $this->assertEquals('pending', $index->json('data.invites.0.status'));
     }
 }
