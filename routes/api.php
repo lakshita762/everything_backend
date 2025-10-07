@@ -1,7 +1,7 @@
-<?php
+﻿<?php
 
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\V1\ExpenseController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\LocationLiveController;
@@ -17,19 +17,15 @@ Route::prefix('v1')
     ->name('api.v1.')
     ->group(function () {
         Route::prefix('auth')->middleware('throttle:60,1')->group(function () {
-            Route::post('register', [AuthController::class, 'register'])->name('register');
             Route::post('login', [AuthController::class, 'login'])->name('login');
-            Route::post('google', [AuthController::class, 'google'])->name('google');
+            Route::get('redirect', [AuthController::class, 'getRedirectUrl'])->name('redirect');
+            Route::get('callback', [AuthController::class, 'handleCallback'])->name('callback');
         });
-
         Route::middleware('auth:sanctum')->group(function () {
             Route::prefix('auth')->group(function () {
                 Route::get('me', [AuthController::class, 'me'])->name('me');
                 Route::post('logout', [AuthController::class, 'logout'])->name('logout');
             });
-
-            Route::get('load-data', [AuthController::class, 'loadData'])->name('load-data');
-
             Route::get('todo-lists', [TodoListController::class, 'index']);
             Route::post('todo-lists', [TodoListController::class, 'store']);
             Route::patch('todo-lists/{todoList}', [TodoListController::class, 'update']);
@@ -68,3 +64,5 @@ Route::prefix('v1')
             Route::get('admin/ping', fn () => response()->json(['success' => true]))->name('admin.ping');
         });
     });
+
+

@@ -1,101 +1,89 @@
-<?php
-
-namespace Tests\Feature;
+﻿<?php
 
 use App\Models\User;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
-use Tests\TestCase;
 
-class LiveSessionTest extends TestCase
-{
-    use RefreshDatabase;
+it('allows a tracker to push live updates and stream data', function () {
+    $owner = User::factory()->create();
+    $tracker = User::factory()->create();
 
-    public function test_tracker_can_push_live_updates_and_stream_data(): void
-    {
-        $owner = User::factory()->create();
-        $tracker = User::factory()->create();
+    Sanctum::actingAs($owner);
+    $shareResponse = $this->postJson('/api/v1/location-shares', [
+        'name' => 'Morning Run',
+        'allow_history' => true,
+    ])->assertCreated();
 
-        Sanctum::actingAs($owner);
-        $shareResponse = $this->postJson('/api/v1/location-shares', [
-            'name' => 'Morning Run',
-            'allow_history' => true,
-        ])->assertCreated();
+    $shareId = $shareResponse->json('data.share.id');
+    $sessionToken = $shareResponse->json('data.share.session_token');
 
-        $shareId = $shareResponse->json('data.share.id');
-        $sessionToken = $shareResponse->json('data.share.session_token');
+    $participant = $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
+        'email' => $tracker->email,
+        'role' => 'tracker',
+    ])->assertCreated();
 
-        $participant = $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
-            'email' => $tracker->email,
-            'role' => 'tracker',
-        ])->assertCreated();
+    $participantId = $participant->json('data.participant.id');
 
-        $participantId = $participant->json('data.participant.id');
+    Sanctum::actingAs($tracker);
+    $this->postJson("/api/v1/location-shares/invites/{$participantId}/accept")
+        ->assertOk()
+        ->assertJsonPath('data.participant.status', 'accepted');
 
-        Sanctum::actingAs($tracker);
-        $this->postJson("/api/v1/location-shares/invites/{$participantId}/accept")
-            ->assertOk()
-            ->assertJsonPath('data.participant.status', 'accepted');
+    $this->postJson('/api/v1/locations/live', [
+        'share_id' => $shareId,
+        'lat' => 12.345678,
+        'lng' => 98.765432,
+    ])->assertCreated();
 
-        $this->postJson('/api/v1/locations/live', [
-            'share_id' => $shareId,
-            'lat' => 12.345678,
-            'lng' => 98.765432,
-        ])->assertCreated();
+    $stream = $this->withHeader('Accept', 'text/event-stream')
+        ->get("/api/v1/locations/live/{$sessionToken}")
+        ->assertOk();
 
-        $stream = $this->withHeader('Accept', 'text/event-stream')
-            ->get("/api/v1/locations/live/{$sessionToken}")
-            ->assertOk();
+    expect($stream->streamedContent())->toContain('12.345678');
+});
 
-        $this->assertStringContainsString('12.345678', $stream->streamedContent());
-    }
+it('prevents viewers from pushing live updates', function () {
+    $owner = User::factory()->create();
+    $viewer = User::factory()->create();
 
-    public function test_viewer_cannot_push_live_updates(): void
-    {
-        $owner = User::factory()->create();
-        $viewer = User::factory()->create();
+    Sanctum::actingAs($owner);
+    $shareId = $this->postJson('/api/v1/location-shares', [
+        'name' => 'Family Trip',
+    ])->assertCreated()->json('data.share.id');
 
-        Sanctum::actingAs($owner);
-        $shareId = $this->postJson('/api/v1/location-shares', [
-            'name' => 'Family Trip',
-        ])->assertCreated()->json('data.share.id');
+    $participantId = $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
+        'email' => $viewer->email,
+        'role' => 'viewer',
+    ])->assertCreated()->json('data.participant.id');
 
-        $participantId = $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
-            'email' => $viewer->email,
-            'role' => 'viewer',
-        ])->assertCreated()->json('data.participant.id');
+    Sanctum::actingAs($viewer);
+    $this->postJson("/api/v1/location-shares/invites/{$participantId}/accept")
+        ->assertOk();
 
-        Sanctum::actingAs($viewer);
-        $this->postJson("/api/v1/location-shares/invites/{$participantId}/accept")
-            ->assertOk();
+    $this->postJson('/api/v1/locations/live', [
+        'share_id' => $shareId,
+        'lat' => 1,
+        'lng' => 1,
+    ])->assertForbidden();
+});
 
-        $this->postJson('/api/v1/locations/live', [
-            'share_id' => $shareId,
-            'lat' => 1,
-            'lng' => 1,
-        ])->assertStatus(403);
-    }
+it('shows pending invites in the location share index', function () {
+    $owner = User::factory()->create();
+    $invitee = User::factory()->create();
 
-    public function test_pending_invite_appears_in_location_share_index(): void
-    {
-        $owner = User::factory()->create();
-        $invitee = User::factory()->create();
+    Sanctum::actingAs($owner);
+    $shareId = $this->postJson('/api/v1/location-shares', [
+        'name' => 'Ski Weekend',
+    ])->assertCreated()->json('data.share.id');
 
-        Sanctum::actingAs($owner);
-        $shareId = $this->postJson('/api/v1/location-shares', [
-            'name' => 'Ski Weekend',
-        ])->assertCreated()->json('data.share.id');
+    $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
+        'email' => $invitee->email,
+        'role' => 'viewer',
+    ])->assertCreated();
 
-        $this->postJson("/api/v1/location-shares/{$shareId}/participants", [
-            'email' => $invitee->email,
-            'role' => 'viewer',
-        ])->assertCreated();
+    Sanctum::actingAs($invitee);
+    $index = $this->getJson('/api/v1/location-shares')
+        ->assertOk();
 
-        Sanctum::actingAs($invitee);
-        $index = $this->getJson('/api/v1/location-shares')
-            ->assertOk();
-
-        $this->assertNotEmpty($index->json('data.invites'));
-        $this->assertEquals('pending', $index->json('data.invites.0.status'));
-    }
-}
+    expect($index->json('data.invites'))->not()->toBeEmpty();
+    expect($index->json('data.invites.0.status'))->toBe('pending');
+});

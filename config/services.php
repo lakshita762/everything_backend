@@ -40,4 +40,10 @@ return [
         'client_secret' => env('GOOGLE_CLIENT_SECRET'),
     ],
 
+    'workos' => [
+        'client_id' => env('WORKOS_CLIENT_ID'),
+        'api_key' => env('WORKOS_API_KEY'),
+        'app_redirect_url' => env('WORKOS_APP_REDIRECT_URL'),
+    ],
+
 ];
