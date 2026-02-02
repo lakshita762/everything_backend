@@ -10,7 +10,9 @@ use App\Http\Resources\LocationShareParticipantResource;
 use App\Models\LocationShare;
 use App\Models\LocationShareParticipant;
 use App\Models\User;
+use App\Mail\LocationShareInviteMail;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -54,6 +56,13 @@ class LocationShareParticipantController extends Controller
             'responded_at' => null,
         ]);
         $participant->save();
+
+        // send invite email (best-effort)
+        try {
+            Mail::to($participant->email)->send(new LocationShareInviteMail($share, $participant));
+        } catch (\Throwable $e) {
+            // Intentionally ignore mail errors; optional: Log::warning()
+        }
 
         Log::info('location_share.invited', [
             'share_id' => $share->id,

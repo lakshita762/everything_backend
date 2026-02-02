@@ -13,8 +13,10 @@ use App\Http\Resources\TodoListInviteResource;
 use App\Models\TodoList;
 use App\Models\TodoListInvite;
 use App\Models\User;
+use App\Mail\TodoListInviteMail;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -75,6 +77,13 @@ class TodoListShareController extends Controller
 
             return $invite->load('list.owner');
         });
+
+        // send invite email (best-effort; do not block response on failures)
+        try {
+            Mail::to($data['email'])->send(new TodoListInviteMail($invite));
+        } catch (\Throwable $e) {
+            // Swallow mail errors to keep API responsive; logs can capture failures if needed
+        }
 
         return response()->json([
             'data' => [
