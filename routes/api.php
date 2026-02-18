@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
@@ -17,6 +17,7 @@ Route::prefix('v1')
     ->name('api.v1.')
     ->group(function () {
         Route::prefix('auth')->middleware('throttle:60,1')->group(function () {
+            Route::post('register', [AuthController::class, 'register'])->name('register');
             Route::post('login', [AuthController::class, 'login'])->name('login');
             Route::get('redirect', [AuthController::class, 'getRedirectUrl'])->name('redirect');
             Route::get('callback', [AuthController::class, 'handleCallback'])->name('callback');
@@ -64,5 +65,6 @@ Route::prefix('v1')
             Route::get('admin/ping', fn () => response()->json(['success' => true]))->name('admin.ping');
         });
     });
+
 
 

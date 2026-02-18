@@ -46,4 +46,11 @@ return [
         'app_redirect_url' => env('WORKOS_APP_REDIRECT_URL'),
     ],
 
+    'smtp2go' => [
+        'api_key' => env('SMTP2GO_API_KEY'),
+        'endpoint' => env('SMTP2GO_API_ENDPOINT', 'https://api.smtp2go.com/v3/email/send'),
+        'from_address' => env('SMTP2GO_FROM_ADDRESS', env('MAIL_FROM_ADDRESS')),
+        'from_name' => env('SMTP2GO_FROM_NAME', env('MAIL_FROM_NAME')),
+    ],
+
 ];

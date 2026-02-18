@@ -11,12 +11,11 @@ use App\Http\Requests\V1\TodoListShareUpdateRequest;
 use App\Http\Resources\TodoListCollaboratorResource;
 use App\Http\Resources\TodoListInviteResource;
 use App\Models\TodoList;
-use App\Models\TodoListInvite;
 use App\Models\User;
-use App\Mail\TodoListInviteMail;
+use App\Services\Smtp2GoService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -80,9 +79,33 @@ class TodoListShareController extends Controller
 
         // send invite email (best-effort; do not block response on failures)
         try {
-            Mail::to($data['email'])->send(new TodoListInviteMail($invite));
+            $list = $invite->list;
+            $owner = $list?->owner;
+
+            $subject = sprintf(
+                '%s invited you to collaborate on "%s"',
+                $owner?->name ?? 'A user',
+                $list?->name ?? 'a todo list'
+            );
+
+            $html = view('emails.todo_list_invite', [
+                'invite' => $invite,
+                'list' => $list,
+                'owner' => $owner,
+            ])->render();
+
+            app(Smtp2GoService::class)->send(
+                to: $data['email'],
+                subject: $subject,
+                htmlBody: $html
+            );
         } catch (\Throwable $e) {
-            // Swallow mail errors to keep API responsive; logs can capture failures if needed
+            Log::warning('todo_list.invite_email_failed', [
+                'todo_list_id' => $todoList->id,
+                'invite_id' => $invite->id,
+                'email' => $data['email'],
+                'error' => $e->getMessage(),
+            ]);
         }
 
         return response()->json([

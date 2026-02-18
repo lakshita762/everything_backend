@@ -10,9 +10,8 @@ use App\Http\Resources\LocationShareParticipantResource;
 use App\Models\LocationShare;
 use App\Models\LocationShareParticipant;
 use App\Models\User;
-use App\Mail\LocationShareInviteMail;
+use App\Services\Smtp2GoService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
@@ -59,9 +58,31 @@ class LocationShareParticipantController extends Controller
 
         // send invite email (best-effort)
         try {
-            Mail::to($participant->email)->send(new LocationShareInviteMail($share, $participant));
+            $owner = $share->owner;
+            $subject = sprintf(
+                '%s invited you to a location share%s',
+                $owner?->name ?? 'A user',
+                $share->name ? (': "' . $share->name . '"') : ''
+            );
+
+            $html = view('emails.location_share_invite', [
+                'share' => $share,
+                'participant' => $participant,
+                'owner' => $owner,
+            ])->render();
+
+            app(Smtp2GoService::class)->send(
+                to: $participant->email,
+                subject: $subject,
+                htmlBody: $html
+            );
         } catch (\Throwable $e) {
-            // Intentionally ignore mail errors; optional: Log::warning()
+            Log::warning('location_share.invite_email_failed', [
+                'share_id' => $share->id,
+                'participant_id' => $participant->id,
+                'email' => $participant->email,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         Log::info('location_share.invited', [
