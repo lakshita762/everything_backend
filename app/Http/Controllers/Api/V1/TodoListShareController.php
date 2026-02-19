@@ -37,20 +37,38 @@ class TodoListShareController extends Controller
         $role = $data['role'];
 
         $invite = DB::transaction(function () use ($todoList, $data, $role) {
-            $existing = $todoList->invites()
-                ->where('email', $data['email'])
-                ->where('status', TodoListInviteStatus::PENDING->value)
+            $email = strtolower($data['email']);
+
+            $user = User::whereRaw('LOWER(email) = ?', [$email])->first();
+
+            if ($user) {
+                $acceptedMembership = $todoList->memberships()
+                    ->where('user_id', $user->id)
+                    ->where('status', TodoListMembershipStatus::ACCEPTED->value)
+                    ->exists();
+
+                if ($acceptedMembership) {
+                    throw ValidationException::withMessages([
+                        'email' => 'This email is already a collaborator on this list.',
+                    ]);
+                }
+            }
+
+            $existingInvite = $todoList->invites()
+                ->whereRaw('LOWER(email) = ?', [$email])
                 ->first();
 
-            if ($existing) {
-                $existing->fill([
+            if ($existingInvite) {
+                $existingInvite->fill([
+                    'email' => $data['email'],
                     'role' => $role,
                     'token' => Str::uuid()->toString(),
                     'expires_at' => now()->addDays(7),
+                    'status' => TodoListInviteStatus::PENDING->value,
                     'invited_at' => now(),
                 ])->save();
 
-                $invite = $existing;
+                $invite = $existingInvite;
             } else {
                 $invite = $todoList->invites()->create([
                     'email' => $data['email'],
@@ -62,7 +80,6 @@ class TodoListShareController extends Controller
                 ]);
             }
 
-            $user = User::where('email', $data['email'])->first();
             if ($user) {
                 $todoList->memberships()->updateOrCreate(
                     ['user_id' => $user->id],
