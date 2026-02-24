@@ -19,8 +19,6 @@ Route::prefix('v1')
         Route::prefix('auth')->middleware('throttle:60,1')->group(function () {
             Route::post('register', [AuthController::class, 'register'])->name('register');
             Route::post('login', [AuthController::class, 'login'])->name('login');
-            Route::get('redirect', [AuthController::class, 'getRedirectUrl'])->name('redirect');
-            Route::get('callback', [AuthController::class, 'handleCallback'])->name('callback');
         });
         Route::middleware('auth:sanctum')->group(function () {
             Route::prefix('auth')->group(function () {
