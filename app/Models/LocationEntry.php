@@ -8,8 +8,11 @@ use Illuminate\Database\Eloquent\Model;
 class LocationEntry extends Model
 {
     use HasFactory;
-    
-    protected $fillable = ['title','latitude','longitude'];
-    public function user(){ return $this->belongsTo(User::class); }
-}
 
+    protected $fillable = ['title', 'tag', 'latitude', 'longitude'];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+}

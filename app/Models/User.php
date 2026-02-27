@@ -87,4 +87,9 @@ class User extends Authenticatable
             ->withPivot(['role', 'status', 'invited_at', 'responded_at'])
             ->withTimestamps();
     }
+
+    public function locationShareGroups(): HasMany
+    {
+        return $this->hasMany(LocationShareGroup::class, 'owner_id');
+    }
 }

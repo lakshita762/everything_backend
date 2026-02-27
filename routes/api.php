@@ -6,6 +6,9 @@ use App\Http\Controllers\Api\V1\ExpenseController;
 use App\Http\Controllers\Api\V1\LocationController;
 use App\Http\Controllers\Api\V1\LocationLiveController;
 use App\Http\Controllers\Api\V1\LocationShareController;
+use App\Http\Controllers\Api\V1\LocationShareGroupController;
+use App\Http\Controllers\Api\V1\LocationShareGroupInviteController;
+use App\Http\Controllers\Api\V1\LocationShareGroupMemberController;
 use App\Http\Controllers\Api\V1\LocationShareInviteController;
 use App\Http\Controllers\Api\V1\LocationShareParticipantController;
 use App\Http\Controllers\Api\V1\TodoListController;
@@ -47,10 +50,18 @@ Route::prefix('v1')
             Route::post('location-shares/{share}/participants', [LocationShareParticipantController::class, 'store'])->middleware('throttle:30,1');
             Route::patch('location-shares/{share}/participants/{participant}', [LocationShareParticipantController::class, 'update']);
             Route::delete('location-shares/{share}/participants/{participant}', [LocationShareParticipantController::class, 'destroy']);
+            Route::post('location-shares/{share}/groups/{group}', [LocationShareGroupInviteController::class, 'store'])->middleware('throttle:30,1');
             Route::post('location-shares/{share}/stop', [LocationShareController::class, 'stop']);
 
             Route::post('location-shares/invites/{participant}/accept', [LocationShareInviteController::class, 'accept']);
             Route::post('location-shares/invites/{participant}/decline', [LocationShareInviteController::class, 'decline']);
+
+            Route::get('location-share-groups', [LocationShareGroupController::class, 'index']);
+            Route::post('location-share-groups', [LocationShareGroupController::class, 'store']);
+            Route::patch('location-share-groups/{group}', [LocationShareGroupController::class, 'update']);
+            Route::delete('location-share-groups/{group}', [LocationShareGroupController::class, 'destroy']);
+            Route::post('location-share-groups/{group}/members', [LocationShareGroupMemberController::class, 'store']);
+            Route::delete('location-share-groups/{group}/members/{member}', [LocationShareGroupMemberController::class, 'destroy']);
 
             Route::post('locations/live', [LocationLiveController::class, 'store'])->middleware('throttle:120,1');
             Route::get('locations/live/{session_token}', [LocationLiveController::class, 'stream']);

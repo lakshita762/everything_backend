@@ -13,7 +13,16 @@ class LocationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $locations = $request->user()->locationEntries()->latest()->get();
+        $locationsQuery = $request->user()->locationEntries()->latest();
+
+        $tag = trim((string) $request->query('tag', ''));
+        if ($tag !== '') {
+            $locationsQuery->where(function ($query) use ($tag) {
+                $query->where('tag', $tag)->orWhere('title', $tag);
+            });
+        }
+
+        $locations = $locationsQuery->get();
 
         return response()->json([
             'data' => [
@@ -25,9 +34,11 @@ class LocationController extends Controller
     public function store(LocationStoreRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $tag = $data['tag'] ?? $data['label'] ?? 'Pinned Location';
 
         $entry = $request->user()->locationEntries()->create([
-            'title' => $data['label'] ?? 'Pinned Location',
+            'title' => $data['label'] ?? $tag,
+            'tag' => $tag,
             'latitude' => $data['lat'],
             'longitude' => $data['lng'],
         ]);

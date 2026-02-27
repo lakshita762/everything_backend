@@ -12,6 +12,7 @@ class LocationEntryResource extends JsonResource
         return [
             'id' => $this->id,
             'label' => $this->title,
+            'tag' => $this->tag ?? $this->title,
             'lat' => (float) $this->latitude,
             'lng' => (float) $this->longitude,
             'created_at' => $this->created_at?->toIso8601String(),
